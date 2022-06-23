@@ -4,19 +4,6 @@ const GET_BLOCKS_URL =
     'https://rooftop-career-switch.herokuapp.com/blocks?token=';
 const CHECK_BLOCKS_URL =
     'https://rooftop-career-switch.herokuapp.com/check?token=';
-/*
-Body CHECK_BLOCKS_URL:
-{
-  "blocks" : [
-    "...string...del...bloque...uno",
-    "...string...del...bloque...dos"
-  ]
-}
---- or ---
-{
-  "encoded" : "...el...string...completo..."
-}
-*/
 
 const init = async () => {
     const { token } = await getToken();
@@ -67,55 +54,66 @@ async function checkSequence(data, token) {
 
 async function* blocksIterator(initIx, blocks, token) {
     try {
-        let i = 0;
+        let j = 0;
         while (true) {
             const { message: value } = await checkSequence(
-                [blocks[initIx], blocks[i + 1]],
+                [blocks[initIx], blocks[j + 1]],
                 token
             );
-            console.log(value);
             if (value) {
-                return blocks[i + 1];
+                return { str: blocks[j + 1], ix: j + 1 };
             }
-            i++;
+            j++;
         }
     } catch (err) {
         console.log('err: ', err);
     }
 }
 
+async function* blocksLoop(blocks, token) {
+    let i = 0;
+
+    let tempBlocks = [...blocks];
+    while (i < tempBlocks.length - 1) {
+        const correctBlock = await blocksIterator(i, tempBlocks, token).next();
+
+        [tempBlocks[i + 1], tempBlocks[correctBlock.value.ix]] = [
+            tempBlocks[correctBlock.value.ix],
+            tempBlocks[i + 1],
+        ];
+        i++;
+        // yield tempBlocks;
+    }
+    yield tempBlocks;
+}
+
 async function sortSequence(blocks, token) {
-    let orderedArray = [blocks[0]];
-
-    const correctBlock = await blocksIterator(
-        orderedArray.length - 1,
-        blocks,
-        token
-    ).next();
-    orderedArray.push(correctBlock.value);
-
-    console.log('orderedArray: ', orderedArray);
-    // for await (const block of blocksIterator(
-    //   orderedArray[orderedArray.length - 1],
-    //   blocks,
-    //   token
-    // )) {
-    //   console.log('block: ', block);
-    // }
-
-    // console.log(orderedArray);
+    for await (const value of blocksLoop(blocks, token)) {
+        return value;
+    }
 }
 
 async function check(blocks, token) {
     // Check if the original blocks are valid
     const { message: response } = await checkFullSequence(blocks, token);
     if (response) {
+        // If is true, return the blocks
         return blocks;
     } else {
-        console.log('Arreglo original:', blocks);
-        sortSequence(blocks, token);
+        // If is false, call the sort method
+        const newBlocksArray = await sortSequence(blocks, token);
+        // check the new array of blocks
+        const { message: response } = await checkFullSequence(
+            newBlocksArray,
+            token
+        );
+        // If is true, return the new array
+        if (response) {
+            return newBlocksArray;
+        }
+        // If is false, something went wrong
+        throw new Error('Whoops!');
     }
-    // return arrayOrdenado;
 }
 
 init();
