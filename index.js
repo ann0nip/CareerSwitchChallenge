@@ -52,7 +52,7 @@ async function checkSequence(data, token) {
     return await response.json();
 }
 
-async function* blocksIterator(initIx, blocks, token) {
+async function* findCorrectBlock(initIx, blocks, token) {
     try {
         let j = 0;
         while (true) {
@@ -75,14 +75,17 @@ async function* blocksLoop(blocks, token) {
 
     let tempBlocks = [...blocks];
     while (i < tempBlocks.length - 1) {
-        const correctBlock = await blocksIterator(i, tempBlocks, token).next();
+        const correctBlock = await findCorrectBlock(
+            i,
+            tempBlocks,
+            token
+        ).next();
 
         [tempBlocks[i + 1], tempBlocks[correctBlock.value.ix]] = [
             tempBlocks[correctBlock.value.ix],
             tempBlocks[i + 1],
         ];
         i++;
-        // yield tempBlocks;
     }
     yield tempBlocks;
 }
