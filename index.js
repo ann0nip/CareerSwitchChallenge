@@ -1,9 +1,9 @@
-const EMAIL = '';
-const GET_TOKEN_URL = `https://rooftop-career-switch.herokuapp.com/token?email=${EMAIL}`;
-const GET_BLOCKS_URL =
-    'https://rooftop-career-switch.herokuapp.com/blocks?token=';
-const CHECK_BLOCKS_URL =
-    'https://rooftop-career-switch.herokuapp.com/check?token=';
+import {
+    getToken,
+    getBlocks,
+    checkSequence,
+    checkFullSequence,
+} from './services.js';
 
 const init = async () => {
     const { token } = await getToken();
@@ -11,48 +11,7 @@ const init = async () => {
     check(blocks, token);
 };
 
-async function getToken() {
-    const response = await fetch(GET_TOKEN_URL);
-
-    return await response.json();
-}
-
-async function getBlocks(token) {
-    const response = await fetch(GET_BLOCKS_URL + token);
-
-    return await response.json();
-}
-
-async function checkFullSequence(data, token) {
-    const response = await fetch(CHECK_BLOCKS_URL + token, {
-        method: 'POST',
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            encoded: data.join(''),
-        }),
-    });
-
-    return await response.json();
-}
-
-async function checkSequence(data, token) {
-    const response = await fetch(CHECK_BLOCKS_URL + token, {
-        method: 'POST',
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            blocks: data,
-        }),
-    });
-    return await response.json();
-}
-
-async function* findCorrectBlock(initIx, blocks, token) {
+async function* correctBlockGenerator(initIx, blocks, token) {
     try {
         let j = 0;
         while (true) {
@@ -61,7 +20,7 @@ async function* findCorrectBlock(initIx, blocks, token) {
                 token
             );
             if (value) {
-                return { str: blocks[j + 1], ix: j + 1 };
+                return j + 1;
             }
             j++;
         }
@@ -70,48 +29,52 @@ async function* findCorrectBlock(initIx, blocks, token) {
     }
 }
 
-async function* blocksLoop(blocks, token) {
+async function* blocksGenerator(blocks, token) {
     let i = 0;
-
     let tempBlocks = [...blocks];
+
     while (i < tempBlocks.length - 1) {
-        const correctBlock = await findCorrectBlock(
+        const correctBlockIndex = await correctBlockGenerator(
             i,
             tempBlocks,
             token
         ).next();
 
-        [tempBlocks[i + 1], tempBlocks[correctBlock.value.ix]] = [
-            tempBlocks[correctBlock.value.ix],
+        [tempBlocks[i + 1], tempBlocks[correctBlockIndex.value]] = [
+            tempBlocks[correctBlockIndex.value],
             tempBlocks[i + 1],
         ];
         i++;
     }
-    yield tempBlocks;
+    return tempBlocks;
 }
 
-async function sortSequence(blocks, token) {
-    for await (const value of blocksLoop(blocks, token)) {
-        return value;
-    }
+async function sortBlocks(blocks, token) {
+    const { value } = await blocksGenerator(blocks, token).next();
+    return value;
 }
 
 async function check(blocks, token) {
     // Check if the original blocks are valid
-    const { message: response } = await checkFullSequence(blocks, token);
-    if (response) {
+    console.log('Checking blocks...');
+    const { message: areBlocksValid } = await checkFullSequence(blocks, token);
+    if (areBlocksValid) {
         // If is true, return the blocks
         return blocks;
     } else {
         // If is false, call the sort method
-        const newBlocksArray = await sortSequence(blocks, token);
+        console.log('Starting sorting phase...');
+        console.log(blocks);
+        const newBlocksArray = await sortBlocks(blocks, token);
         // check the new array of blocks
-        const { message: response } = await checkFullSequence(
+        const { message: areBlocksValid } = await checkFullSequence(
             newBlocksArray,
             token
         );
         // If is true, return the new array
-        if (response) {
+        if (areBlocksValid) {
+            console.log('Retrieving ordered array...');
+            console.log(newBlocksArray);
             return newBlocksArray;
         }
         // If is false, something went wrong
